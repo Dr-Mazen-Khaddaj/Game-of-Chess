@@ -201,6 +201,20 @@ checkPath _         list  Empty    = all (== Empty) list
 checkPath (White _) list (Black _) = all (== Empty) list
 checkPath (Black _) list (White _) = all (== Empty) list
 checkPath _ _ _ = False
+--
+-- Takes a board and the initial position of a piece and returns all possible moves of that piece --
+possibleMovements :: Board -> Position -> Map.Map Position Square
+possibleMovements board position = Map.filterWithKey validMove . Map.delete position . getSquares $ board
+    where
+        validMove k _ = checkMovement pieceToMove board position k
+        pieceToMove = getSquares board Map.! position
+--
+-- Takes a board, and a final position (destination), and returns all possible moves to that destination --
+possibleDestination :: Board -> Position -> Map.Map Position Square
+possibleDestination board position = Map.filterWithKey validMove . Map.delete position . getSquares $ board
+    where
+        validMove k pieceToMove = checkMovement pieceToMove board k position
+--
 ----------------------------------------------------------------------------------------------------------------- |
 -- || Main || --
 main :: IO ()
@@ -234,7 +248,11 @@ takePieceToMove player = do
     board    <- gets getBoard
     let pieceToMove = getSquares board Map.! position
     if rightPlayer pieceToMove
-        then return position
+        then if not $ Map.null $ possibleMovements board position
+            then return position
+            else do
+                lift $ putStrLn "No possible movements! Please choose another piece!"
+                takePieceToMove player
         else do
             lift $ putStrLn "Invalid Square! Please choose from your own pieces!"
             takePieceToMove player
