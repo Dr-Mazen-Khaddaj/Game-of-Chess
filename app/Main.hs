@@ -4,8 +4,9 @@ import Control.Monad.Reader (ReaderT, runReaderT, asks)
 import Control.Monad (forever)
 import qualified Data.Map as Map
 import System.Console.ANSI (clearScreen, getTerminalSize, setCursorPosition, cursorDown, cursorBackward)
-import Data.List (intersperse, intercalate)
+import Data.List (intersperse, intercalate, groupBy)
 import Data.Char (chr, ord)
+import Data.Function (on)
 ----------------------------------------------------------------------------------------------------------------- |
 -- | Data Types | --
 data Piece = Pawn | Knight | Bishop | Rook | Queen | King deriving Eq
@@ -15,7 +16,8 @@ newtype Board = Board { getSquares :: Map.Map Position Square }
 data Player = Player1 | Player2 deriving Eq
 data Game = Game
     { getBoard :: Board
-    , getTest :: Int
+    , killedWhitePieces :: [Square]
+    , killedBlackPieces :: [Square]
     }
 data GraphicsConfig = GraphicsConfig
     { terminalSize  :: (Int,Int)
@@ -81,7 +83,7 @@ newBoard = Board $ Map.mapWithKey f emptySquares where
 
 -- Initialize Game --
 newGame :: Game
-newGame = Game newBoard 0
+newGame = Game newBoard [] []
 --
 -- | Functions | --
 --
@@ -227,6 +229,7 @@ playGame = forever $ do
     printBoard
     lift $ putStrLn "Player 1"
     playTurn Player1
+    printBoard
     lift $ putStrLn "Player 2"
     playTurn Player2
 --
@@ -239,8 +242,14 @@ playTurn player = do
     board <- gets getBoard
     (replacedPiece, updatedBoard) <- pure $ runState (makeMove pos1 pos2) board
     modify (\ game -> game {getBoard = updatedBoard})
-    printBoard
-    -- Do more things
+    case replacedPiece of
+        White _ -> do
+            killedPieces <- gets killedWhitePieces
+            modify (\ game -> game {killedWhitePieces = replacedPiece : killedPieces})
+        Black _ -> do
+            killedPieces <- gets killedBlackPieces
+            modify (\ game -> game {killedBlackPieces = replacedPiece : killedPieces})
+        Empty -> return ()
 --
 takePieceToMove :: Player -> StateT Game IO Position
 takePieceToMove player = do
@@ -302,7 +311,8 @@ printBoard = do
     lift $ runReaderT (printGrid . Map.keys . getSquares $ board) config
     lift $ runReaderT (printPieces board) config
     lift $ runReaderT  printBorder config
-    lift $ runReaderT  printInfo config
+    game <- get
+    lift $ runReaderT (printGameInfo game) config
     lift $ setCursorPosition (h-5) 0
 --
 printBorder :: ReaderT GraphicsConfig IO ()
@@ -335,24 +345,32 @@ printPieces (Board squares) = do
     let printPiece (x, y) piece = setCursorPosition (vPos - y*sh + div sh 2) (hPos + (x-1)*sw + div sw 2) >> print piece
     lift $ sequence_ . Map.mapWithKey printPiece $ squares
 --
-printInfo :: ReaderT GraphicsConfig IO ()
-printInfo = do
-    (sh, sw)     <- asks squareSize
+printGameInfo :: Game -> ReaderT GraphicsConfig IO ()
+printGameInfo game = do
     (bh, bw)     <- asks boardSize
     (vPos, hPos) <- asks boardPosition
     isLandscape  <- asks landscapeOrientation
     if isLandscape
         then lift $ setCursorPosition (vPos - bh) (div hPos 2 - 5)
         else lift $ setCursorPosition (vPos - bh - 5) (hPos + div bw 2 - 5)
-    lift $ putStr " Player 1 "
-    lift $ cursorDown 1
-    lift $ cursorBackward 10
-    lift $ putStr "----------"
+    lift $ putStr "Player 1"
+    lift printLine
+    lift $ mapM_ print5killedPieces . groupBy5 . killedBlackPieces $ game
     if isLandscape
         then lift $ setCursorPosition (vPos - bh) (hPos + bw + div hPos 2 - 5)
         else lift $ setCursorPosition (vPos + 3) (hPos + div bw 2 - 5)
-    lift $ putStr " Player 2 "
-    lift $ cursorDown 1
-    lift $ cursorBackward 10
-    lift $ putStr "----------"
+    lift $ putStr "Player 2"
+    lift printLine
+    lift $ mapM_ print5killedPieces . groupBy5 . killedWhitePieces $ game
+    where
+        groupBy5 = groupBy (on (==) fst) . zip (concatMap (replicate 5) [1..4])
+        print5killedPieces groupOfsquares = do
+            cursorDown 2
+            cursorBackward 22
+            let squares = map snd groupOfsquares
+            sequence_ . intersperse (putStr "   ") . map (putStr . show) $ squares
+        printLine = do
+            cursorDown 1
+            cursorBackward 9
+            putStr "----------     "
 ----------------------------------------------------------------------------------------------------------------- |
