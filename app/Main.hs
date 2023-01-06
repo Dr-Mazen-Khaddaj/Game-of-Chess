@@ -3,7 +3,7 @@ import Control.Monad.State (lift, put, get, modify, State, runState, StateT, run
 import Control.Monad.Reader (ReaderT, runReaderT, asks)
 import Control.Monad (forever)
 import qualified Data.Map as Map
-import System.Console.ANSI (clearScreen, getTerminalSize, setCursorPosition)
+import System.Console.ANSI (clearScreen, getTerminalSize, setCursorPosition, cursorDown, cursorBackward)
 import Data.List (intersperse, intercalate)
 import Data.Char (chr, ord)
 ----------------------------------------------------------------------------------------------------------------- |
@@ -302,6 +302,7 @@ printBoard = do
     lift $ runReaderT (printGrid . Map.keys . getSquares $ board) config
     lift $ runReaderT (printPieces board) config
     lift $ runReaderT  printBorder config
+    lift $ runReaderT  printInfo config
     lift $ setCursorPosition (h-5) 0
 --
 printBorder :: ReaderT GraphicsConfig IO ()
@@ -334,4 +335,24 @@ printPieces (Board squares) = do
     let printPiece (x, y) piece = setCursorPosition (vPos - y*sh + div sh 2) (hPos + (x-1)*sw + div sw 2) >> print piece
     lift $ sequence_ . Map.mapWithKey printPiece $ squares
 --
+printInfo :: ReaderT GraphicsConfig IO ()
+printInfo = do
+    (sh, sw)     <- asks squareSize
+    (bh, bw)     <- asks boardSize
+    (vPos, hPos) <- asks boardPosition
+    isLandscape  <- asks landscapeOrientation
+    if isLandscape
+        then lift $ setCursorPosition (vPos - bh) (div hPos 2 - 5)
+        else lift $ setCursorPosition (vPos - bh - 5) (hPos + div bw 2 - 5)
+    lift $ putStr " Player 1 "
+    lift $ cursorDown 1
+    lift $ cursorBackward 10
+    lift $ putStr "----------"
+    if isLandscape
+        then lift $ setCursorPosition (vPos - bh) (hPos + bw + div hPos 2 - 5)
+        else lift $ setCursorPosition (vPos + 3) (hPos + div bw 2 - 5)
+    lift $ putStr " Player 2 "
+    lift $ cursorDown 1
+    lift $ cursorBackward 10
+    lift $ putStr "----------"
 ----------------------------------------------------------------------------------------------------------------- |
