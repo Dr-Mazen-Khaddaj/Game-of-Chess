@@ -15,7 +15,8 @@ type Position = (Int, Int)
 newtype Board = Board { getSquares :: Map.Map Position Square }
 data Player = Player1 | Player2 deriving Eq
 data Game = Game
-    { getBoard :: Board
+    { getBoard          :: Board
+    , currentPlayer     :: Player
     , killedWhitePieces :: [Square]
     , killedBlackPieces :: [Square]
     }
@@ -83,7 +84,7 @@ newBoard = Board $ Map.mapWithKey f emptySquares where
 
 -- Initialize Game --
 newGame :: Game
-newGame = Game newBoard [] []
+newGame = Game newBoard Player1 [] []
 --
 -- | Functions | --
 --
@@ -145,7 +146,7 @@ checkMovement (White Bishop) board (x1, y1) (x2, y2)
         (finalDestination : pathX) = [getSquares board Map.! (x2 - n * signum (x2 - x1) , y2 - n * signum (y2 - y1)) | n <- [0 .. abs (y2 - y1) - 1]]
 
 checkMovement (Black Bishop) board (x1, y1) (x2, y2)
-    | y2 - y1 == x2 - x1 = checkPath (Black Bishop) pathX finalDestination
+    | abs (y2 - y1) == abs (x2 - x1) = checkPath (Black Bishop) pathX finalDestination
     | otherwise = False
     where
         (finalDestination : pathX) = [getSquares board Map.! (x2 - n * signum (x2 - x1) , y2 - n * signum (y2 - y1)) | n <- [0 .. abs (y2 - y1) - 1]]
@@ -226,16 +227,18 @@ main = do
 --
 playGame :: StateT Game IO ()
 playGame = forever $ do
+    modify (\ game -> game {currentPlayer = Player1})
     printBoard
     lift $ putStrLn "Player 1"
     playTurn Player1
+    modify (\ game -> game {currentPlayer = Player2})
     printBoard
     lift $ putStrLn "Player 2"
     playTurn Player2
 --
 playTurn :: Player -> StateT Game IO ()
 playTurn player = do
-    lift $ putStrLn "What piece do you want to Move?"
+    lift $ putStrLn "Which piece do you want to move?"
     pos1 <- takePieceToMove player
     lift $ putStrLn "Where do you want to move it to?"
     pos2 <- takeDestination pos1
@@ -305,15 +308,19 @@ takeInput = do
 printBoard :: StateT Game IO ()
 printBoard = do
     lift clearScreen
-    Just (h, w)   <- lift getTerminalSize
-    board <- gets getBoard
+    board  <- gets getBoard
     config <- lift graphicsConfig
+    player <- gets currentPlayer
     lift $ runReaderT (printGrid . Map.keys . getSquares $ board) config
-    lift $ runReaderT (printPieces board) config
-    lift $ runReaderT  printBorder config
+    case player of
+        Player1 -> do
+            lift $ runReaderT (printPieces          board) config
+            lift $ runReaderT  printBorder                 config
+        Player2 -> do
+            lift $ runReaderT (printPiecesInReverse board) config
+            lift $ runReaderT  printBorderInReverse        config
     game <- get
     lift $ runReaderT (printGameInfo game) config
-    lift $ setCursorPosition (h-5) 0
 --
 printBorder :: ReaderT GraphicsConfig IO ()
 printBorder = do
@@ -329,6 +336,22 @@ printBorder = do
     sequence_ [lift $ setCursorPosition (vPos - div (sh+1) 2 - i) (hPos - 2)      >> putStr [c] | (c, i) <- vBorder]
     sequence_ [lift $ setCursorPosition (vPos - div (sh+1) 2 - i) (hPos + 1 + bw) >> putStr [c] | (c, i) <- vBorder]
 --
+-- Print pieces from Player 2 perspective
+printBorderInReverse :: ReaderT GraphicsConfig IO ()
+printBorderInReverse = do
+    (sh, sw)     <- asks squareSize
+    (bh, bw)     <- asks boardSize
+    (vPos, hPos) <- asks boardPosition
+    let hBorder = concatMap (: replicate (sw-1) ' ') . reverse $ ['a' .. 'h']
+    lift $ setCursorPosition (vPos + 1) (hPos + div sw 2)
+    lift $ putStr hBorder
+    lift $ setCursorPosition (vPos - bh - 2) (hPos + div sw 2)
+    lift $ putStr hBorder
+    let vBorder = concatMap (: replicate (sh-1) ' ') (reverse ['1' .. '8']) `zip` [0..]
+    sequence_ [lift $ setCursorPosition (vPos - div (sh+1) 2 - i) (hPos - 2)      >> putStr [c] | (c, i) <- vBorder]
+    sequence_ [lift $ setCursorPosition (vPos - div (sh+1) 2 - i) (hPos + 1 + bw) >> putStr [c] | (c, i) <- vBorder]
+
+--
 printGrid :: [Position] -> ReaderT GraphicsConfig IO ()
 printGrid ks = do
     (sh, sw)     <- asks squareSize
@@ -343,6 +366,14 @@ printPieces (Board squares) = do
     (sh, sw)     <- asks squareSize
     (vPos, hPos) <- asks boardPosition
     let printPiece (x, y) piece = setCursorPosition (vPos - y*sh + div sh 2) (hPos + (x-1)*sw + div sw 2) >> print piece
+    lift $ sequence_ . Map.mapWithKey printPiece $ squares
+--
+-- Print pieces from Player 2 perspective
+printPiecesInReverse :: Board -> ReaderT GraphicsConfig IO ()
+printPiecesInReverse (Board squares) = do
+    (sh, sw)     <- asks squareSize
+    (vPos, hPos) <- asks boardPosition
+    let printPiece (x, y) piece = setCursorPosition (vPos - (9-y)*sh + div sh 2) (hPos + (8-x)*sw + div sw 2) >> print piece
     lift $ sequence_ . Map.mapWithKey printPiece $ squares
 --
 printGameInfo :: Game -> ReaderT GraphicsConfig IO ()
@@ -362,6 +393,7 @@ printGameInfo game = do
     lift $ putStr "Player 2"
     lift printLine
     lift $ mapM_ print5killedPieces . groupBy5 . killedWhitePieces $ game
+    lift $ setCursorPosition (vPos-10) 0
     where
         groupBy5 = groupBy (on (==) fst) . zip (concatMap (replicate 5) [1..4])
         print5killedPieces groupOfsquares = do
@@ -372,5 +404,5 @@ printGameInfo game = do
         printLine = do
             cursorDown 1
             cursorBackward 9
-            putStr "----------     "
+            putStr "----------      "
 ----------------------------------------------------------------------------------------------------------------- |
