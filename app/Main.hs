@@ -1,5 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
-import Control.Monad.State (lift, put, get, modify, State, runState, StateT, runStateT, gets)
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE FlexibleContexts #-}
+import Control.Monad.State (lift, put, get, modify, State, runState, StateT, runStateT, gets, MonadState)
 import Control.Monad.Reader (ReaderT, runReaderT, asks)
 import Control.Monad (forever)
 import qualified Data.Map as Map
@@ -9,32 +11,34 @@ import Data.Char (chr, ord)
 import Data.Function (on)
 ----------------------------------------------------------------------------------------------------------------- |
 -- | Data Types | --
-data Piece = Pawn | Knight | Bishop | Rook | Queen | King deriving Eq
-data Square = White Piece | Black Piece | Empty deriving Eq
+data Piece    = Pawn | Knight | Bishop | Rook | Queen | King   deriving Eq
+data Square   = White Piece   | Black Piece   | Empty          deriving Eq
+data Player   = Player1       | Player2                        deriving Eq
 type Position = (Int, Int)
-newtype Board = Board { getSquares :: Map.Map Position Square }
-data Player = Player1 | Player2 deriving Eq
-data CastlingInfo = CastlingInfo
-    { getRookPosition    ::  Position
-    , getRookDestination ::  Position
-    , getRookPath        :: [Position]
-    , getKingPath        :: [Position]
+newtype Board = Board
+    { getSquares           ::  Map.Map Position Square
     }
 data Game = Game
-    { getBoard          :: Board
-    , currentPlayer     :: Player
-    , killedWhitePieces :: [Square]
-    , killedBlackPieces :: [Square]
-    , movedPieces       :: Map.Map Position Square
-    , getCastlingInfo   :: Map.Map (Position, Position) CastlingInfo
+    { getBoard             ::  Board
+    , currentPlayer        ::  Player
+    , killedWhitePieces    :: [Square]
+    , killedBlackPieces    :: [Square]
+    , movedPieces          ::  Map.Map Position Square
+    , getCastlingInfo      ::  Map.Map (Position, Position) CastlingInfo
+    }
+data CastlingInfo = CastlingInfo
+    { getRookPosition      ::  Position
+    , getRookDestination   ::  Position
+    , getRookPath          :: [Position]
+    , getKingPath          :: [Position]
     }
 data GraphicsConfig = GraphicsConfig
-    { terminalSize  :: (Int,Int)
-    , boardSize     :: (Int,Int)
-    , squareSize    :: (Int,Int)
-    , boardPosition :: (Int,Int)
-    , landscapeOrientation :: Bool
-    , whiteChar :: Char
+    { terminalSize         :: (Int,Int)
+    , boardSize            :: (Int,Int)
+    , squareSize           :: (Int,Int)
+    , boardPosition        :: (Int,Int)
+    , landscapeOrientation ::  Bool
+    , whiteChar            ::  Char
     }
 --
 instance Show Piece where
@@ -55,7 +59,7 @@ instance Show Square where
 instance Show Board where
     show :: Board -> String
     show (Board list) = concat $ Map.mapWithKey (\ pos sqr -> show pos ++ "\t : " ++ show sqr ++ "\t\t ") list
---
+----------------------------------------------------------------------------------------------------------------- |
 -- | Initializations | --
 --
 -- Graphics Configuration --
@@ -130,22 +134,33 @@ castlingInfo =
 -- Initialize Game --
 newGame :: Game
 newGame = Game newBoard Player1 [] [] Map.empty castlingInfo
---
+----------------------------------------------------------------------------------------------------------------- |
 -- | Functions | --
 --
 -- Make a Move --
-makeMove :: Position -> Position -> State Game Square
-makeMove initialPosition finalPosition = do
+makeMove :: MonadState Game m => Position -> Position -> m Square
+makeMove position destination = do
     squares <- gets $ getSquares . getBoard
-    let pieceToMove    = squares Map.! initialPosition
-    let pieceToReplace = squares Map.! finalPosition
-    modify (\ game -> game {getBoard = Board . Map.insert initialPosition Empty       $ squares})
-    modify (\ game -> game {getBoard = Board . Map.insert finalPosition   pieceToMove $ squares})
+    let pieceToMove    = squares Map.! position
+    let pieceToReplace = squares Map.! destination
+    newMovedPieces <- gets $ Map.insert destination pieceToReplace . Map.insert position pieceToMove . movedPieces
+    modify (\ game -> game {movedPieces = newMovedPieces})
+    modify (\ game -> game {getBoard = Board . Map.insert position    Empty       $ squares})
+    modify (\ game -> game {getBoard = Board . Map.insert destination pieceToMove $ squares})
     return pieceToReplace
 --
+-- Make a virtual move --
+-- Returns a new temporary board (for checking purposes) without modifying the original board in the game state.
+makeVirtualMove :: MonadState Game m => Position -> Position -> m Board
+makeVirtualMove position destination = do
+    squares <- gets $ getSquares . getBoard
+    let pieceToMove = squares Map.! position
+    return $ Board . Map.insert destination pieceToMove . Map.insert position Empty $ squares
+-- !!! -  en passant !!! --
+----------------------------------------------------------------------------------------------------------------- |
 -- | Checkings | --
--- Check Move --------------------------------------------------------------------------------------------------- |
--- !!! -  en passant, Castling !!! --
+--
+-- Check Move --
 checkMovement :: Square -> Board -> Position -> Position -> Bool
 -- Pawn --
 checkMovement (White Pawn) board (x1, y1) (x2, y2)
@@ -263,20 +278,20 @@ possibleDestination board position = Map.filterWithKey validMove . Map.delete po
     where
         validMove k pieceToMove = checkMovement pieceToMove board k position
 --
--- Check King
-kingNotInCheck :: Square -> Board -> Bool
-kingNotInCheck square board@(Board squares) = Map.null $ possibleDestination board kingPosition
-    where kingPosition = case square of
-            White _ -> head $ Map.keys $ Map.filter (== White King) squares
-            Black _ -> head $ Map.keys $ Map.filter (== Black King) squares
-            Empty -> error "`kingNotInCheck` called with an Empty Square!"
+-- Check King --
+kingNotInCheck :: Player -> Board -> Bool
+kingNotInCheck player board@(Board squares) = Map.null $ possibleDestination board kingPosition
+    where kingPosition = case player of
+            Player1 -> head $ Map.keys $ Map.filter (== White King) squares
+            Player2 -> head $ Map.keys $ Map.filter (== Black King) squares
 --
--- checkCastleMove -- !! Create Castling info data type to store castling info, then minimize function
---
---  -- Creates a board where king is at Position p
+-- Check Castling Move --
+-- Since this is a special, 2 step move, I'm doing the checking + part of the move in the same function.
+-- If valid, do First part of the move (Rook Move) and return True.
 checkCastleMove :: Position -> Position -> State Game Bool
 checkCastleMove kingPosition kingDestination = do
-    game <- get
+    game   <- get
+    player <- gets currentPlayer
     case Map.lookup (kingPosition, kingDestination) $ getCastlingInfo game of
         Nothing -> pure False
         Just _  -> do
@@ -285,21 +300,13 @@ checkCastleMove kingPosition kingDestination = do
             rookPath        <- gets $ getRookPath        . (Map.! (kingPosition, kingDestination)) . getCastlingInfo
             kingPath        <- gets $ getKingPath        . (Map.! (kingPosition, kingDestination)) . getCastlingInfo
             squares         <- gets $ getSquares . getBoard
-            let kingSquare = squares Map.! kingPosition
-            let boardWhereKingAt p = Board $ Map.insert p kingSquare $ Map.delete kingPosition squares
-            let clearPath          = all ((== Empty) . (squares Map.!)) rookPath
-            let kingPathNotInCheck = map (kingNotInCheck kingSquare . boardWhereKingAt) kingPath
+            let clearPath   = all ((== Empty) . (squares Map.!)) rookPath
+            kingPathNotInCheck <- map (kingNotInCheck player) <$> mapM (makeVirtualMove kingPosition) kingPath
             didNotMoveKing <- gets $ Map.notMember kingPosition . movedPieces
             didNotMoveRook <- gets $ Map.notMember rookPosition . movedPieces
             if and (didNotMoveKing : didNotMoveRook : clearPath : kingPathNotInCheck)
                 then makeMove rookPosition rookDestination >> return True
                 else return False
---
--- Not Used --
-    -- board <- gets getBoard
-    -- let squares = getSquares board
-    -- let kingPositionNotInCheck    = kingNotInCheck kingSquare (boardWithKingAt (3, 1))
-    -- let kingDestinationNotInCheck = kingNotInCheck kingSquare (boardWithKingAt (5, 1))
 --
 checkEn_passantMove :: Position -> Position -> State Game Bool
 checkEn_passantMove = undefined
@@ -322,13 +329,11 @@ playGame = forever $ do
 --
 playTurn :: StateT Game IO ()
 playTurn = do
-    player <- gets currentPlayer
     lift $ putStrLn "Which piece do you want to move?"
     pos1 <- takePieceToMove
     lift $ putStrLn "Where do you want to move it to?"
     pos2 <- takeDestination pos1
-    game <- get
-    (replacedPiece, updatedGame) <- pure $ runState (makeMove pos1 pos2) game
+    replacedPiece <- makeMove pos1 pos2
     case replacedPiece of
         White _ -> do
             killedPieces <- gets killedWhitePieces
@@ -360,17 +365,20 @@ takePieceToMove = do
 -- edit possible movements to exclude movements that expose the King to check
 takeDestination :: Position -> StateT Game IO Position
 takeDestination pos1 = do
-    pos2  <- lift takeInput
-    board <- gets getBoard
+    pos2   <- lift takeInput
+    board  <- gets getBoard
+    player <- gets currentPlayer
     let pieceToMove = getSquares board Map.! pos1
     (isCastling,  _) <- gets $ runState (checkCastleMove     pos1 pos2)
     (isEn_passant,_) <- gets $ runState (checkEn_passantMove pos1 pos2)
--- Do: if king in check --
-    if isEn_passant || isCastling || pos1 /= pos2 && checkMovement pieceToMove board pos1 pos2
-        then return pos2
-        else do
-            lift . putStrLn $ "Invalid Move! Please choose another square to move your piece " ++ show pieceToMove
-            takeDestination pos1
+    virtualBoard     <- makeVirtualMove pos1 pos2
+    if kingNotInCheck player virtualBoard
+        then if isEn_passant || isCastling || pos1 /= pos2 && checkMovement pieceToMove board pos1 pos2
+            then return pos2
+            else do
+                lift . putStrLn $ "Invalid Move! Please choose another square to move your piece " ++ show pieceToMove
+                takeDestination pos1
+        else undefined
 --
 takeInput :: IO Position
 takeInput = do
