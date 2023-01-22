@@ -180,6 +180,7 @@ makeMove position destination = do
                            , getBoard     =  updatedBoard })
     return pieceToReplace
 --
+{- Update Skipped Square -}
 updateSkippedSquare :: MonadState Game m => Position -> Position -> m ()
 updateSkippedSquare position destination = do
     player          <- gets currentPlayer
@@ -191,6 +192,7 @@ updateSkippedSquare position destination = do
         then modify (\ game -> game {skippedSquare = Only (fmap stepBack destination, destination)})
         else modify (\ game -> game {skippedSquare = None})
 --
+{- Update Killed Pieces -}
 updateKilledPieces :: MonadState Game m => Square -> m ()
 updateKilledPieces replacedPiece = do
     case replacedPiece of
@@ -202,6 +204,7 @@ updateKilledPieces replacedPiece = do
             modify (\ game -> game {killedBlackPieces = replacedPiece : killedPieces})
         Empty -> return ()
 --
+{- Change Player -}
 changePlayer :: MonadState Game m => m ()
 changePlayer = do
     player <- gets currentPlayer
