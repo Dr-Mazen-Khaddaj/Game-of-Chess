@@ -95,7 +95,7 @@ graphicsConfig ((h , w) , whiteChar) = GraphicsConfig (h, w) boardSize squareSiz
     {- Square Size -}
         squareSize@(sh, sw) = (s , 2*s+1)
     {- Board Size -}
-        boardSize @(bh, bw) = (sh*8 , sw*8)
+        boardSize@(bh, bw) = (sh*8 , sw*8)
     {- Board Position -}
         (vShift, hShift) | landscapeOrientation = (div (h - bh) 2 , div (w - bw) 2)
                          | otherwise            = (h - bh - 8     , div (w - bw) 2)
