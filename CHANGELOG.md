@@ -8,8 +8,10 @@
 ## [v0.1.1] - 2025-04-29
 - Updated `.cabal` file with modern `base` and Cabal versions
 - Minor fix in `Main.hs` for forward compatibility
+- ✅ Recommended GHC version: 9.6.7
 
 ## [v0.1.0] - 2023-01-22
 - Basic chess game runs in the terminal.
 - Players can move pieces manually.
 - Basic piece movement logic implemented.
+- ✅ Recommended GHC version: 8.10.7
