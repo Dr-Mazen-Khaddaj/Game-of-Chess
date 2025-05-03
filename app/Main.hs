@@ -1,5 +1,5 @@
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleContexts #-}
+{- FOURMOLU_DISABLE -}
 import Control.Monad.State (MonadState, StateT, runStateT, get, gets, modify, lift)
 import Control.Monad.Reader (ReaderT, runReaderT, asks)
 import Control.Monad.IO.Class ( MonadIO(liftIO) )
@@ -10,73 +10,7 @@ import Data.Char (toLower)
 import Text.Read (readMaybe)
 import System.IO (hFlush, stdout)
 import Control.Monad (void, join, when)
------------------------------------------------------------------------------------------------------------------ |
--- | Data Types | --
-data Piece    = Pawn | Knight | Bishop | Rook | Queen | King   deriving Eq
-data Square   = White Piece   | Black Piece   | Empty          deriving Eq
-data Player   = Player1       | Player2                        deriving Eq
-type Position = (Int, Int)
-type Board    = Map.Map Position Square
-data Skipped  = None | Only (Position, Position) deriving Show
-data Game = Game
-    { getBoard             ::  Board
-    , currentPlayer        ::  Player
-    , opponent             ::  Player
-    , killedWhitePieces    :: [Square]
-    , killedBlackPieces    :: [Square]
-    , movedPieces          ::  Map.Map Position Square
-    , getCastlingInfo      ::  Map.Map (Position, Position) CastlingInfo
-    , skippedSquare        ::  Skipped
-    }
-data CastlingInfo = CastlingInfo
-    { getRookPosition      ::  Position
-    , getRookDestination   ::  Position
-    , getRookPath          :: [Position]
-    , getKingPath          :: [Position]
-    }
-data GraphicsConfig = GraphicsConfig
-    { terminalSize         :: (Int,Int)
-    , boardSize            :: (Int,Int)
-    , squareSize           :: (Int,Int)
-    , boardPosition        :: (Int,Int)
-    , playerBox            :: (Int,Int)
-    , landscapeOrientation ::  Bool
-    , whiteChar            ::  Char
-    }
---
-instance Show Piece where
-    show :: Piece -> String
-    show Pawn   = "Pawn"
-    show Knight = "Knight"
-    show Bishop = "Bishop"
-    show Rook   = "Rook"
-    show Queen  = "Queen"
-    show King   = "King"
---
-{- ♔ ♕ ♖ ♗ ♘ ♙ ♚ ♛ ♜ ♝ ♞ ♟ -}
-instance Show Square where
-    show :: Square -> String
-    {- White -}
-    show (White Pawn)   = "♟ "
-    show (White Knight) = "♞ "
-    show (White Bishop) = "♝ "
-    show (White Rook)   = "♜ "
-    show (White Queen)  = "♛ "
-    show (White King)   = "♚ "
-    {- Black -}
-    show (Black Pawn)   = "♙ "
-    show (Black Knight) = "♘ "
-    show (Black Bishop) = "♗ "
-    show (Black Rook)   = "♖ "
-    show (Black Queen)  = "♕ "
-    show (Black King)   = "♔ "
-    show Empty     = ""
---
-instance Show Player where
-    show :: Player -> String
-    show player = case player of
-        Player1 -> "Player 1"
-        Player2 -> "Player 2"
+import Types
 ----------------------------------------------------------------------------------------------------------------- |
 -- | Initializations | --
 --
