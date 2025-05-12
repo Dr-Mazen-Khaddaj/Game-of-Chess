@@ -12,12 +12,34 @@ module GameLogic
     , updateKilledPieces
     , prepareEnPassantMove
     , kingNotInCheck
-    )
-where
+    ) where
 
 import Control.Monad (void)
 import Control.Monad.State (MonadState, get, gets, modify)
 import Types
+    ( Board
+    , CastlingInfo
+        ( getKingPath
+        , getRookDestination
+        , getRookPath
+        , getRookPosition
+        )
+    , Game
+        ( currentPlayer
+        , getBoard
+        , getCastlingInfo
+        , killedBlackPieces
+        , killedWhitePieces
+        , movedPieces
+        , opponent
+        , skippedSquare
+        )
+    , Piece (Bishop, King, Knight, Pawn, Queen, Rook)
+    , Player (..)
+    , Position
+    , Skipped (None, Only)
+    , Square (..)
+    )
 
 import qualified Data.Map as Map
 

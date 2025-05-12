@@ -19,7 +19,7 @@ executable GameofChess
                       UI.Terminal
                       UI.Common
                       UI.Config
-    build-depends:    base ^>=4.18.3.0,
+    build-depends:    base ^>=4.21.0.0,
                       ansi-terminal,
                       mtl,
                       containers
