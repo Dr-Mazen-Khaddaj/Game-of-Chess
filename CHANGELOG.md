@@ -1,9 +1,18 @@
 # Changelog
 
 ## [Unreleased]
-- Refactored code into modules: Main, Board, Pieces, GameLogic.
-- Improved terminal UI (board display, move input).
-- Planned AI opponent.
+- Restructured project into modular components (`Types`, `GameLogic`, `GameController`, `GameInit`, `UI.*`)
+- Enabled `GHC2021`, set GHC warnings, and updated Cabal build settings
+- Bumped `base` to `^>=4.21.0.0`
+- Introduced Fourmolu for formatting (`.fourmolu.yaml`, version 0.18.0.0)
+
+### Planned
+- Enhance core game logic
+- Refactor data structures for clarity and efficiency
+- Refactor monadic design
+- Further modularization
+- Enhanced terminal UI
+- AI opponent
 
 ## [v0.1.1] - 2025-04-29
 - Updated `.cabal` file with modern `base` and Cabal versions
