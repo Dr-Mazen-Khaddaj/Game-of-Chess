@@ -1,21 +1,19 @@
-module GameLogic
+module GameLogic.Rules
     ( possibleMovements
     , checkPromotion
     , checkKingAfterMove
     , checkCastleMove
     , checkEnPassantMove
     , checkMovement
-    , changePlayer
     , checkGameOver
-    , updateSkippedSquare
-    , makeMove
-    , updateKilledPieces
-    , prepareEnPassantMove
     , kingNotInCheck
     ) where
 
-import Control.Monad (void)
-import Control.Monad.State (MonadState, get, gets, modify)
+import Control.Monad.State (MonadState, get, gets)
+import Data.Map qualified as Map
+
+-- FIXME : This should not be imported, actions are separate from rules!
+import GameLogic.Actions (makeMove)
 import Types
     ( Board
     , CastlingInfo
@@ -28,10 +26,7 @@ import Types
         ( currentPlayer
         , getBoard
         , getCastlingInfo
-        , killedBlackPieces
-        , killedWhitePieces
         , movedPieces
-        , opponent
         , skippedSquare
         )
     , Piece (Bishop, King, Knight, Pawn, Queen, Rook)
@@ -41,55 +36,7 @@ import Types
     , Square (..)
     )
 
-import qualified Data.Map as Map
-
 {- FOURMOLU_DISABLE -}
-
--- | Functions | --
---
-{- Make Move -}
-makeMove :: MonadState Game m => Position -> Position -> m Square
-makeMove position destination = do
-    board <- gets getBoard
-    let pieceToMove      = board Map.! position
-    let pieceToReplace   = board Map.! destination
-    let updatedBoard     =        Map.insert destination pieceToMove    . Map.insert position Empty       $ board
-    newMovedPieces      <- gets $ Map.insert destination pieceToReplace . Map.insert position pieceToMove . movedPieces
-    modify (\ game -> game { movedPieces  =  newMovedPieces
-                           , getBoard     =  updatedBoard })
-    return pieceToReplace
---
-{- Update Skipped Square -}
-updateSkippedSquare :: MonadState Game m => Position -> Position -> m ()
-updateSkippedSquare position destination = do
-    player          <- gets currentPlayer
-    pieceToMove     <- gets $ (Map.! position) . getBoard
-    let isPawn      =  pieceToMove `elem` [White Pawn, Black Pawn]
-    let deltaY      =  abs $ snd position - snd destination
-    let stepBack    =  case player of Player1 -> (+) (-1) ; Player2 -> (+) 1
-    if isPawn && deltaY == 2
-        then modify (\ game -> game {skippedSquare = Only (fmap stepBack destination, destination)})
-        else modify (\ game -> game {skippedSquare = None})
---
-{- Update Killed Pieces -}
-updateKilledPieces :: MonadState Game m => Square -> m ()
-updateKilledPieces replacedPiece = do
-    case replacedPiece of
-        White _ -> do
-            killedPieces <- gets killedWhitePieces
-            modify (\ game -> game {killedWhitePieces = replacedPiece : killedPieces})
-        Black _ -> do
-            killedPieces <- gets killedBlackPieces
-            modify (\ game -> game {killedBlackPieces = replacedPiece : killedPieces})
-        Empty -> return ()
---
-{- Change Player -}
-changePlayer :: MonadState Game m => m ()
-changePlayer = do
-    player <- gets currentPlayer
-    case player of
-        Player1 -> modify (\ game -> game {currentPlayer = Player2 , opponent = Player1})
-        Player2 -> modify (\ game -> game {currentPlayer = Player1 , opponent = Player2})
 --
 {- Check King -}
 checkKingAfterMove :: MonadState Game m => Position -> Position -> m Bool
@@ -134,6 +81,7 @@ checkPromotion = do
         Player1 -> return $ or $ Map.mapWithKey (\ (_, y) s -> y == 8 && s == White Pawn) board
         Player2 -> return $ or $ Map.mapWithKey (\ (_, y) s -> y == 1 && s == Black Pawn) board
 --
+-- REFACTOR This should be removed
 {- Castling -}
 -- Since this is a special, 2 step move, I'm doing the checking + part of the move in the same function.
 -- If valid, do First part of the move (Rook Move) and return True.
@@ -180,13 +128,6 @@ validateEnPassantMove posPawn position destination = do
     let checkMove      = checkMovement pieceToMove modifiedBoard position destination
     let checkKing      = kingNotInCheck player finalBoard
     return $ checkMove && checkKing
---
-prepareEnPassantMove :: MonadState Game m => m ()
-prepareEnPassantMove = do
-    skippedSquare <- gets skippedSquare
-    case skippedSquare of
-        Only (posEmpty, posPawn) -> void $ makeMove posPawn posEmpty
-        None -> error "Can't prepare En passant move!"
 --
 {- check if Game is over -}
 checkGameOver :: MonadState Game m => m Bool
@@ -292,7 +233,7 @@ checkMovement (Black King) board (x1, y1) (x2, y2)
     where
         deltaPos = (abs (x2 - x1) , abs (y2 - y1))
         finalDestination = board Map.! (x2, y2)
-
+--
 -- Empty : Invalid Move! --
 checkMovement Empty _ _ _ = error "Invalid Move! @ checkMovement"
 --

@@ -4,12 +4,13 @@ import Control.Monad (join, when)
 import Control.Monad.Reader (ReaderT (..), liftIO)
 import Control.Monad.State (MonadIO, MonadState, StateT, gets, lift, modify)
 import Data.Char (toLower)
-import GameLogic
+import Data.Map qualified as Map
 import System.IO (hFlush, stdout)
+
+import GameLogic.Actions
+import GameLogic.Rules (checkGameOver, checkPromotion, kingNotInCheck)
 import Types
 import UI.Terminal
-
-import qualified Data.Map as Map
 
 {- playGame -}
 playGame :: GraphicsConfig -> StateT Game IO ()
@@ -54,6 +55,7 @@ doPromotion = do
     player <- gets currentPlayer
     board <- gets getBoard
     let options = [Queen, Rook, Bishop, Knight]
+    -- OPTIMIZE : revise logic, get rid of singleton pattern matching ([pawnPosition])
     let [pawnPosition] = case player of
             Player1 -> Map.keys $ Map.filterWithKey (\(_, y) s -> y == 8 && s == White Pawn) board
             Player2 -> Map.keys $ Map.filterWithKey (\(_, y) s -> y == 1 && s == Black Pawn) board

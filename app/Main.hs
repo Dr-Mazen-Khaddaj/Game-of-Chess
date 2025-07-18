@@ -1,4 +1,5 @@
 import Control.Monad.State (runStateT)
+
 import GameController (playGame)
 import GameInit (newGame)
 import UI.Config (graphicsConfig)

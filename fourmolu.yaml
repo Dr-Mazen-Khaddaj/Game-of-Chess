@@ -3,7 +3,7 @@ column-limit: 100
 function-arrows: leading
 comma-style: leading
 import-export-style: leading
-import-grouping: by-scope-then-qualified
+import-grouping: by-scope
 indent-wheres: true
 record-brace-space: false
 newlines-between-decls: 1

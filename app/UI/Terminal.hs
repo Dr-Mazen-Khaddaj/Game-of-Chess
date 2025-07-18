@@ -14,7 +14,7 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader (ReaderT, asks, runReaderT)
 import Control.Monad.State (StateT, gets, lift)
 import Data.List (intercalate, intersperse)
-import GameLogic
+import Data.Map qualified as Map
 import System.Console.ANSI
     ( clearScreen
     , cursorBackward
@@ -26,6 +26,16 @@ import System.Console.ANSI
     )
 import System.IO (hFlush, stdout)
 import Text.Read (readMaybe)
+
+import GameLogic.Actions (prepareEnPassantMove)
+import GameLogic.Rules
+    ( checkCastleMove
+    , checkEnPassantMove
+    , checkKingAfterMove
+    , checkMovement
+    , kingNotInCheck
+    , possibleMovements
+    )
 import Types
     ( Board
     , Game
@@ -48,8 +58,6 @@ import Types
     , Square (..)
     )
 import UI.Config (graphicsConfig)
-
-import qualified Data.Map as Map
 
 {- FOURMOLU_DISABLE -}
 
